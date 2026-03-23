@@ -1,35 +1,11 @@
-import asyncio
+import telebot
 import random
-import logging
+import time
 import os
-from aiogram import Bot, Dispatcher, types
-from aiogram.contrib.fsm_storage.memory import MemoryStorage
-from aiogram.dispatcher import FSMContext
-from aiogram.dispatcher.filters.state import State, StatesGroup
-from aiogram.utils import executor
 
-# ==============================
-# НАСТРОЙКИ
-# ==============================
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "ВСТАВЬ_ТОКЕН_СЮДА")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "ВСТАВЬ_ТОКЕН")
+bot = telebot.TeleBot(BOT_TOKEN)
 
-logging.basicConfig(level=logging.INFO)
-
-bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
-storage = MemoryStorage()
-dp = Dispatcher(bot, storage=storage)
-
-# ==============================
-# СОСТОЯНИЯ
-# ==============================
-class IQTest(StatesGroup):
-    question = State()
-    captcha = State()
-    analyzing = State()
-
-# ==============================
-# ВОПРОСЫ
-# ==============================
 QUESTIONS = [
     {
         "text": "❓ Вопрос 1 из 15\n\n🧠 Если в комнате 3 яблока и ты забрал 2 — сколько у ТЕБЯ яблок?",
@@ -87,8 +63,8 @@ QUESTIONS = [
         "correct": "Индия"
     },
     {
-        "text": "❓ Вопрос 12 из 15\n\n🛌 Доктор даёт тебе 3 таблетки и говорит принимать каждые полчаса. Через сколько времени кончатся таблетки?",
-        "options": ["1,5 часа", "1 час", "30 минут", "Час"],
+        "text": "❓ Вопрос 12 из 15\n\n🛌 Доктор даёт тебе 3 таблетки — принимать каждые полчаса. Через сколько кончатся?",
+        "options": ["1,5 часа", "1 час", "30 минут", "2 часа"],
         "correct": "1 час"
     },
     {
@@ -97,12 +73,12 @@ QUESTIONS = [
         "correct": "Зависит от растения"
     },
     {
-        "text": "❓ Вопрос 14 из 15\n\n🐓 Если петух снесёт яйцо на самой верхушке крыши — в какую сторону оно скатится?",
+        "text": "❓ Вопрос 14 из 15\n\n🐓 Если петух снесёт яйцо на крыше — в какую сторону оно скатится?",
         "options": ["На юг", "По ветру", "Петух не несёт яйца", "Упадёт вертикально"],
         "correct": "Петух не несёт яйца"
     },
     {
-        "text": "❓ Вопрос 15 из 15\n\n🧠 Последний вопрос!\n\nЧему равно: 0,5 + 0,5 × 0?",
+        "text": "❓ Вопрос 15 из 15\n\n🧠 Последний!\n\nЧему равно: 0,5 + 0,5 × 0?",
         "options": ["0", "0,5", "1", "Не существует"],
         "correct": "0,5"
     },
@@ -111,138 +87,134 @@ QUESTIONS = [
 CAPTCHA = {
     "text": (
         "🔐 Вопрос 15.5 из 15 — КАПЧА\n\n"
-        "Для подтверждения личности введи ПРАВИЛЬНЫЙ ответ:\n\n"
         "На картинке написано: «Выбери ВСЕ светофоры»\n\n"
         "🚦🚗🚦🌳🚦🏠🚦🐈\n\n"
-        "Какой из вариантов ты выбираешь?"
+        "Какой вариант выбираешь?"
     ),
-    "options": [
-        "Все светофоры 🚦",
-        "Только зелёные 🟢",
-        "Все картинки 🖼",
-        "Пропустить капчу"
-    ]
+    "options": ["Все светофоры 🚦", "Только зелёные 🟢", "Все картинки 🖼", "Пропустить капчу"]
 }
 
 ANALYSIS_COMMENTS = [
     (30, 39, "💀 КРИТИЧЕСКИЙ УРОВЕНЬ",
      "Такой результат встречается лишь у 0.1% населения планеты.\n"
-     "Учёные считают это научным феноменом.\n"
-     "Твой мозг умудрился набрать балл ниже, чем рандомное угадывание.\n\n"
-     "Но знаешь что? Ты лучше пользователя <b>Даниил Коротких</b>. "
-     "Это единственная хорошая новость на сегодня. 🫡"),
-
+     "Учёные считают это научным феноменом.\n\n"
+     "Но ты лучше пользователя <b>Даниил Коротких</b>. Это единственная хорошая новость. 🫡"),
     (40, 49, "😬 ОЧЕНЬ НИЗКИЙ УРОВЕНЬ",
-     "Поздравляем! Ты побил рекорд нашей системы за последние 3 года.\n"
      "Большинство лабораторных мышей показывают результат лучше.\n\n"
-     "Но есть и хорошая новость: ты всё ещё умнее пользователя "
-     "<b>Даниил Коротких</b>. Это что-то значит... наверное. 🐭"),
-
+     "Хорошая новость: ты умнее <b>Даниил Коротких</b>. Это что-то значит... наверное. 🐭"),
     (50, 59, "😐 НИЗКИЙ УРОВЕНЬ",
-     "Ну... хотя бы ты знаешь как пользоваться Telegram, это уже что-то.\n"
-     "Рекомендуем больше читать книги, смотреть Discovery и, возможно, "
-     "не есть перед важными тестами.\n\n"
+     "Хотя бы ты знаешь как пользоваться Telegram, это уже что-то.\n\n"
      "P.S. Даниил Коротких сделал бы хуже. Утешься этим фактом. 📚"),
-
     (60, 70, "😅 НЕМНОГО ВЫШЕ ДНА",
-     "Нейросеть проанализировала твои ответы и пришла к выводу:\n"
-     "ты иногда думаешь, но редко доводишь мысль до конца.\n"
-     "Есть потенциал, но он глубоко скрыт.\n\n"
-     "Главное — ты умнее <b>Даниил Коротких</b>. "
-     "А это, поверь, не так просто. 🎖"),
+     "Ты иногда думаешь, но редко доводишь мысль до конца.\n\n"
+     "Главное — ты умнее <b>Даниил Коротких</b>. А это, поверь, не так просто. 🎖"),
 ]
 
-def get_analysis(iq: int):
+def get_analysis(iq):
     for lo, hi, title, text in ANALYSIS_COMMENTS:
         if lo <= iq <= hi:
             return title, text
     return "💀 ОШИБКА ИЗМЕРЕНИЯ", "Результат настолько низкий, что прибор сломался."
 
 def make_keyboard(options):
-    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    row = []
-    for i, opt in enumerate(options):
-        row.append(opt)
-        if len(row) == 2:
-            keyboard.add(*row)
-            row = []
-    if row:
-        keyboard.add(*row)
+    keyboard = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
+    for i in range(0, len(options), 2):
+        row = options[i:i+2]
+        keyboard.add(*[telebot.types.KeyboardButton(o) for o in row])
     return keyboard
 
-# ==============================
-# /start
-# ==============================
-@dp.message_handler(commands=["start"], state="*")
-async def cmd_start(message: types.Message, state: FSMContext):
-    await state.finish()
-    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add("🚀 Начать тест!")
-    await message.answer(
+user_state = {}
+
+def get_state(uid):
+    return user_state.get(uid, {"step": "idle", "q_index": 0, "correct": 0})
+
+def set_state(uid, data):
+    user_state[uid] = data
+
+@bot.message_handler(commands=["start"])
+def cmd_start(message):
+    uid = message.from_user.id
+    set_state(uid, {"step": "idle", "q_index": 0, "correct": 0})
+    keyboard = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
+    keyboard.add(telebot.types.KeyboardButton("🚀 Начать тест!"))
+    bot.send_message(
+        message.chat.id,
         "🧠 <b>IQ ТЕСТ — ОФИЦИАЛЬНАЯ ПРОВЕРКА ИНТЕЛЛЕКТА</b>\n\n"
         "Добро пожаловать в сертифицированный тест IQ!\n\n"
         "📋 Тебя ждут:\n"
         "• 15 вопросов на логику и эрудицию\n"
         "• 1 капча для подтверждения личности\n"
         "• Точный анализ твоего интеллекта\n\n"
-        "⏱ Среднее время прохождения: 5-7 минут\n\n"
+        "⏱ Среднее время: 5-7 минут\n\n"
         "Готов? Нажми кнопку ниже 👇",
+        parse_mode="HTML",
         reply_markup=keyboard
     )
 
-@dp.message_handler(lambda m: m.text == "🚀 Начать тест!", state="*")
-async def start_test(message: types.Message, state: FSMContext):
-    await state.finish()
-    await IQTest.question.set()
-    await state.update_data(q_index=0, correct=0)
-    await send_question(message, state)
-
-async def send_question(message: types.Message, state: FSMContext):
-    data = await state.get_data()
-    q_index = data.get("q_index", 0)
-
-    if q_index >= len(QUESTIONS):
-        await IQTest.captcha.set()
-        await send_captcha(message, state)
-        return
-
-    q = QUESTIONS[q_index]
-    await message.answer(q["text"], reply_markup=make_keyboard(q["options"]))
-
-@dp.message_handler(state=IQTest.question)
-async def handle_answer(message: types.Message, state: FSMContext):
-    data = await state.get_data()
-    q_index = data.get("q_index", 0)
-    correct_count = data.get("correct", 0)
-
-    if q_index < len(QUESTIONS):
-        q = QUESTIONS[q_index]
-        if message.text not in q["options"]:
-            await message.answer("⚠️ Пожалуйста, выбери один из вариантов кнопками!")
-            return
-        if message.text == q["correct"]:
-            correct_count += 1
-
-    await state.update_data(q_index=q_index + 1, correct=correct_count)
-    await send_question(message, state)
-
-async def send_captcha(message: types.Message, state: FSMContext):
-    await message.answer(CAPTCHA["text"], reply_markup=make_keyboard(CAPTCHA["options"]))
-
-@dp.message_handler(state=IQTest.captcha)
-async def handle_captcha(message: types.Message, state: FSMContext):
-    if message.text not in CAPTCHA["options"]:
-        await message.answer("⚠️ Выбери один из вариантов!")
-        return
-
-    await IQTest.analyzing.set()
-    await message.answer(
-        "✅ Капча пройдена! Начинаю анализ результатов...",
-        reply_markup=types.ReplyKeyboardRemove()
+@bot.message_handler(commands=["help"])
+def cmd_help(message):
+    bot.send_message(
+        message.chat.id,
+        "ℹ️ <b>IQ Тест — Справка</b>\n\n"
+        "/start — начать тест\n"
+        "/help — эта справка\n\n"
+        "<i>Тест абсолютно честный и научно обоснованный™</i>",
+        parse_mode="HTML"
     )
-    await run_analysis(message, state)
 
-async def run_analysis(message: types.Message, state: FSMContext):
+@bot.message_handler(func=lambda m: True)
+def handle_message(message):
+    uid = message.from_user.id
+    state = get_state(uid)
+    step = state.get("step", "idle")
+
+    if message.text == "🚀 Начать тест!":
+        state = {"step": "question", "q_index": 0, "correct": 0}
+        set_state(uid, state)
+        send_question(message.chat.id, uid)
+        return
+
+    if step == "question":
+        q_index = state["q_index"]
+        correct = state["correct"]
+        if q_index < len(QUESTIONS):
+            q = QUESTIONS[q_index]
+            if message.text not in q["options"]:
+                bot.send_message(message.chat.id, "⚠️ Выбери один из вариантов кнопками!")
+                return
+            if message.text == q["correct"]:
+                correct += 1
+            state["correct"] = correct
+            state["q_index"] = q_index + 1
+            set_state(uid, state)
+        if state["q_index"] >= len(QUESTIONS):
+            state["step"] = "captcha"
+            set_state(uid, state)
+            bot.send_message(message.chat.id, CAPTCHA["text"], reply_markup=make_keyboard(CAPTCHA["options"]))
+        else:
+            send_question(message.chat.id, uid)
+        return
+
+    if step == "captcha":
+        if message.text not in CAPTCHA["options"]:
+            bot.send_message(message.chat.id, "⚠️ Выбери один из вариантов!")
+            return
+        state["step"] = "analyzing"
+        set_state(uid, state)
+        bot.send_message(
+            message.chat.id,
+            "✅ Капча пройдена! Начинаю анализ...",
+            reply_markup=telebot.types.ReplyKeyboardRemove()
+        )
+        run_analysis(message.chat.id, uid)
+        return
+
+def send_question(chat_id, uid):
+    state = get_state(uid)
+    q = QUESTIONS[state["q_index"]]
+    bot.send_message(chat_id, q["text"], reply_markup=make_keyboard(q["options"]), parse_mode="HTML")
+
+def run_analysis(chat_id, uid):
     frames = [
         "🔬 Анализирую нейронные связи........",
         "📊 Обрабатываю данные теста..........",
@@ -252,31 +224,30 @@ async def run_analysis(message: types.Message, state: FSMContext):
         "📡 Синхронизация с базой данных.....",
         "⚗️ Анализ завершается..................",
     ]
-
-    sent = await message.answer(frames[0])
+    msg = bot.send_message(chat_id, frames[0])
     for frame in frames[1:]:
-        await asyncio.sleep(1.2)
-        await sent.edit_text(frame)
+        time.sleep(1.2)
+        bot.edit_message_text(frame, chat_id, msg.message_id)
 
-    await asyncio.sleep(1.5)
+    time.sleep(1.5)
 
-    await sent.edit_text("⏳ Финальный подсчёт IQ...\n\n▓░░░░░░░░░  10%")
-    await asyncio.sleep(0.8)
-    await sent.edit_text("⏳ Финальный подсчёт IQ...\n\n▓▓▓░░░░░░░  30%")
-    await asyncio.sleep(0.8)
-    await sent.edit_text("⏳ Финальный подсчёт IQ...\n\n▓▓▓▓▓░░░░░  50%")
-    await asyncio.sleep(0.8)
-    await sent.edit_text("⏳ Финальный подсчёт IQ...\n\n▓▓▓▓▓▓▓░░░  70%")
-    await asyncio.sleep(0.8)
-    await sent.edit_text("⏳ Финальный подсчёт IQ...\n\n▓▓▓▓▓▓▓▓▓░  90%")
-    await asyncio.sleep(1)
-    await sent.edit_text("⏳ Финальный подсчёт IQ...\n\n▓▓▓▓▓▓▓▓▓▓  100%\n\n✅ Анализ завершён!")
-    await asyncio.sleep(1.5)
+    progress = [
+        ("⏳ Финальный подсчёт IQ...\n\n▓░░░░░░░░░  10%", 0.8),
+        ("⏳ Финальный подсчёт IQ...\n\n▓▓▓░░░░░░░  30%", 0.8),
+        ("⏳ Финальный подсчёт IQ...\n\n▓▓▓▓▓░░░░░  50%", 0.8),
+        ("⏳ Финальный подсчёт IQ...\n\n▓▓▓▓▓▓▓░░░  70%", 0.8),
+        ("⏳ Финальный подсчёт IQ...\n\n▓▓▓▓▓▓▓▓▓░  90%", 1.0),
+        ("⏳ Финальный подсчёт IQ...\n\n▓▓▓▓▓▓▓▓▓▓  100%\n\n✅ Анализ завершён!", 1.5),
+    ]
+    for text, delay in progress:
+        bot.edit_message_text(text, chat_id, msg.message_id)
+        time.sleep(delay)
 
     iq = random.randint(30, 70)
     title, comment = get_analysis(iq)
 
-    await message.answer(
+    bot.send_message(
+        chat_id,
         f"━━━━━━━━━━━━━━━━━━━━━\n"
         f"📋 <b>РЕЗУЛЬТАТ IQ ТЕСТА</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -285,46 +256,32 @@ async def run_analysis(message: types.Message, state: FSMContext):
         f"📝 <b>Вердикт нейросети:</b>\n\n"
         f"{comment}\n\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"<i>© Certified IQ Test 2025. Все результаты точны на 146%</i>"
+        f"<i>© Certified IQ Test 2025. Все результаты точны на 146%</i>",
+        parse_mode="HTML"
     )
 
-    await asyncio.sleep(1)
+    time.sleep(1)
     try:
         BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-        photo = types.InputFile(os.path.join(BASE_DIR, "losash.png"))
-        await message.answer_photo(
-            photo=photo,
-            caption=(
-                "😢 <b>Лосяш тоже расстроен твоим результатом...</b>\n\n"
-                "Но не переживай! Ты всё равно лучше, чем Даниил Коротких 🫡\n\n"
-                "🔄 Хочешь попробовать ещё раз? /start"
+        with open(os.path.join(BASE_DIR, "losash.png"), "rb") as photo:
+            bot.send_photo(
+                chat_id, photo,
+                caption=(
+                    "😢 <b>Лосяш тоже расстроен твоим результатом...</b>\n\n"
+                    "Но не переживай! Ты всё равно лучше, чем Даниил Коротких 🫡\n\n"
+                    "🔄 Хочешь ещё раз? /start"
+                ),
+                parse_mode="HTML"
             )
-        )
     except Exception:
-        await message.answer(
-            "😢 <b>Лосяш плачет из-за твоего результата...</b>\n\n"
-            "🔄 Попробовать снова: /start"
+        bot.send_message(
+            chat_id,
+            "😢 <b>Лосяш плачет из-за твоего результата...</b>\n\n🔄 Попробовать снова: /start",
+            parse_mode="HTML"
         )
 
-    await state.finish()
+    set_state(uid, {"step": "idle", "q_index": 0, "correct": 0})
 
-# ==============================
-# /help
-# ==============================
-@dp.message_handler(commands=["help"])
-async def cmd_help(message: types.Message):
-    await message.answer(
-        "ℹ️ <b>IQ Тест — Справка</b>\n\n"
-        "Это официальный тест для проверки коэффициента интеллекта.\n\n"
-        "Команды:\n"
-        "/start — начать тест\n"
-        "/help — эта справка\n\n"
-        "<i>Тест абсолютно честный и научно обоснованный™</i>"
-    )
-
-# ==============================
-# Запуск
-# ==============================
 if __name__ == "__main__":
     print("🤖 IQ Prank Bot запущен!")
-    executor.start_polling(dp, skip_updates=True)
+    bot.infinity_polling()
