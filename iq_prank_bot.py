@@ -1,24 +1,23 @@
 import asyncio
 import random
 import logging
-from aiogram import Bot, Dispatcher, types, F
-from aiogram.filters import CommandStart, Command
-from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State, StatesGroup
-from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove, FSInputFile
-from aiogram.utils.keyboard import ReplyKeyboardBuilder
+import os
+from aiogram import Bot, Dispatcher, types
+from aiogram.contrib.fsm_storage.memory import MemoryStorage
+from aiogram.dispatcher import FSMContext
+from aiogram.dispatcher.filters.state import State, StatesGroup
+from aiogram.utils import executor
 
 # ==============================
 # НАСТРОЙКИ
 # ==============================
-import os
-BOT_TOKEN = os.getenv("BOT_TOKEN") 
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "ВСТАВЬ_ТОКЕН_СЮДА")
 
 logging.basicConfig(level=logging.INFO)
 
-bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher(storage=MemoryStorage())
+bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
+storage = MemoryStorage()
+dp = Dispatcher(bot, storage=storage)
 
 # ==============================
 # СОСТОЯНИЯ
@@ -29,94 +28,79 @@ class IQTest(StatesGroup):
     analyzing = State()
 
 # ==============================
-# ВОПРОСЫ (15.5 вопросов = 15 + 1 капча)
+# ВОПРОСЫ
 # ==============================
 QUESTIONS = [
-    # 1 - серьёзный
     {
         "text": "❓ Вопрос 1 из 15\n\n🧠 Если в комнате 3 яблока и ты забрал 2 — сколько у ТЕБЯ яблок?",
         "options": ["1", "2", "3", "Я не ем яблоки"],
         "correct": "2"
     },
-    # 2 - смешной
     {
         "text": "❓ Вопрос 2 из 15\n\n🐄 Сколько месяцев в году имеют 28 дней?",
         "options": ["Только февраль", "Один", "Все 12", "Зависит от года"],
         "correct": "Все 12"
     },
-    # 3 - серьёзный
     {
         "text": "❓ Вопрос 3 из 15\n\n📐 Если квадрат имеет сторону 5 см, чему равна его площадь?",
         "options": ["10 см²", "20 см²", "25 см²", "15 см²"],
         "correct": "25 см²"
     },
-    # 4 - смешной
     {
         "text": "❓ Вопрос 4 из 15\n\n🚀 Может ли мужчина жениться на сестре своей вдовы?",
         "options": ["Нет, это незаконно", "Да, если попросит", "Нет, он же мёртв", "Только в Европе"],
         "correct": "Нет, он же мёртв"
     },
-    # 5 - серьёзный
     {
         "text": "❓ Вопрос 5 из 15\n\n🌍 Столица Австралии — это...",
         "options": ["Сидней", "Мельбурн", "Канберра", "Брисбен"],
         "correct": "Канберра"
     },
-    # 6 - смешной
     {
         "text": "❓ Вопрос 6 из 15\n\n🔥 Что станет с красной шапочкой, если её стирать при 90°C?",
         "options": ["Сядет", "Выцветет", "Ничего", "Это персонаж, у неё нет шапки"],
-        "correct": "Ничего"  # все варианты считаем верными, iq всегда низкий
+        "correct": "Ничего"
     },
-    # 7 - серьёзный
     {
         "text": "❓ Вопрос 7 из 15\n\n🧮 Чему равно: 2 + 2 × 2?",
         "options": ["8", "6", "4", "16"],
         "correct": "6"
     },
-    # 8 - смешной
     {
         "text": "❓ Вопрос 8 из 15\n\n🐟 Сколько животных Моисей взял на ковчег каждого вида?",
         "options": ["2", "7", "По одному", "Это был Ной, а не Моисей"],
         "correct": "Это был Ной, а не Моисей"
     },
-    # 9 - серьёзный
     {
         "text": "❓ Вопрос 9 из 15\n\n⚡ Что тяжелее: килограмм железа или килограмм ваты?",
         "options": ["Железо", "Вата", "Одинаково", "Зависит от влажности"],
         "correct": "Одинаково"
     },
-    # 10 - смешной
     {
         "text": "❓ Вопрос 10 из 15\n\n🌙 Некоторые месяцы имеют 31 день. Сколько месяцев имеют 30 дней?",
         "options": ["4", "6", "11", "Все кроме февраля"],
         "correct": "11"
     },
-    # 11 - серьёзный
     {
         "text": "❓ Вопрос 11 из 15\n\n🔢 В какой стране придумали арабские цифры?",
         "options": ["Аравия", "Египет", "Индия", "Иран"],
         "correct": "Индия"
     },
-    # 12 - смешной
     {
         "text": "❓ Вопрос 12 из 15\n\n🛌 Доктор даёт тебе 3 таблетки и говорит принимать каждые полчаса. Через сколько времени кончатся таблетки?",
         "options": ["1,5 часа", "1 час", "30 минут", "Час"],
         "correct": "1 час"
     },
-    # 13 - серьёзный
     {
         "text": "❓ Вопрос 13 из 15\n\n🌿 Что происходит с растением если его не поливать 3 месяца?",
         "options": ["Ничего", "Засохнет", "Уснёт", "Зависит от растения"],
         "correct": "Зависит от растения"
     },
-    # 14 - смешной
     {
         "text": "❓ Вопрос 14 из 15\n\n🐓 Если петух снесёт яйцо на самой верхушке крыши — в какую сторону оно скатится?",
         "options": ["На юг", "По ветру", "Петух не несёт яйца", "Упадёт вертикально"],
         "correct": "Петух не несёт яйца"
     },
-    # 15 - серьёзный
     {
         "text": "❓ Вопрос 15 из 15\n\n🧠 Последний вопрос!\n\nЧему равно: 0,5 + 0,5 × 0?",
         "options": ["0", "0,5", "1", "Не существует"],
@@ -124,7 +108,6 @@ QUESTIONS = [
     },
 ]
 
-# Капча — «вопрос 15.5»
 CAPTCHA = {
     "text": (
         "🔐 Вопрос 15.5 из 15 — КАПЧА\n\n"
@@ -141,9 +124,6 @@ CAPTCHA = {
     ]
 }
 
-# ==============================
-# АНАЛИЗ В КОНЦЕ (всегда плохой)
-# ==============================
 ANALYSIS_COMMENTS = [
     (30, 39, "💀 КРИТИЧЕСКИЙ УРОВЕНЬ",
      "Такой результат встречается лишь у 0.1% населения планеты.\n"
@@ -178,12 +158,26 @@ def get_analysis(iq: int):
             return title, text
     return "💀 ОШИБКА ИЗМЕРЕНИЯ", "Результат настолько низкий, что прибор сломался."
 
+def make_keyboard(options):
+    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    row = []
+    for i, opt in enumerate(options):
+        row.append(opt)
+        if len(row) == 2:
+            keyboard.add(*row)
+            row = []
+    if row:
+        keyboard.add(*row)
+    return keyboard
+
 # ==============================
 # /start
 # ==============================
-@dp.message(CommandStart())
+@dp.message_handler(commands=["start"], state="*")
 async def cmd_start(message: types.Message, state: FSMContext):
-    await state.clear()
+    await state.finish()
+    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    keyboard.add("🚀 Начать тест!")
     await message.answer(
         "🧠 <b>IQ ТЕСТ — ОФИЦИАЛЬНАЯ ПРОВЕРКА ИНТЕЛЛЕКТА</b>\n\n"
         "Добро пожаловать в сертифицированный тест IQ!\n\n"
@@ -193,17 +187,14 @@ async def cmd_start(message: types.Message, state: FSMContext):
         "• Точный анализ твоего интеллекта\n\n"
         "⏱ Среднее время прохождения: 5-7 минут\n\n"
         "Готов? Нажми кнопку ниже 👇",
-        parse_mode="HTML",
-        reply_markup=ReplyKeyboardMarkup(
-            keyboard=[[KeyboardButton(text="🚀 Начать тест!")]],
-            resize_keyboard=True
-        )
+        reply_markup=keyboard
     )
 
-@dp.message(F.text == "🚀 Начать тест!")
+@dp.message_handler(lambda m: m.text == "🚀 Начать тест!", state="*")
 async def start_test(message: types.Message, state: FSMContext):
-    await state.set_data({"q_index": 0, "answers": [], "correct": 0})
-    await state.set_state(IQTest.question)
+    await state.finish()
+    await IQTest.question.set()
+    await state.update_data(q_index=0, correct=0)
     await send_question(message, state)
 
 async def send_question(message: types.Message, state: FSMContext):
@@ -211,24 +202,14 @@ async def send_question(message: types.Message, state: FSMContext):
     q_index = data.get("q_index", 0)
 
     if q_index >= len(QUESTIONS):
-        # Переходим к капче
-        await state.set_state(IQTest.captcha)
+        await IQTest.captcha.set()
         await send_captcha(message, state)
         return
 
     q = QUESTIONS[q_index]
-    builder = ReplyKeyboardBuilder()
-    for opt in q["options"]:
-        builder.add(KeyboardButton(text=opt))
-    builder.adjust(2)
+    await message.answer(q["text"], reply_markup=make_keyboard(q["options"]))
 
-    await message.answer(
-        q["text"],
-        parse_mode="HTML",
-        reply_markup=builder.as_markup(resize_keyboard=True)
-    )
-
-@dp.message(IQTest.question)
+@dp.message_handler(state=IQTest.question)
 async def handle_answer(message: types.Message, state: FSMContext):
     data = await state.get_data()
     q_index = data.get("q_index", 0)
@@ -236,8 +217,7 @@ async def handle_answer(message: types.Message, state: FSMContext):
 
     if q_index < len(QUESTIONS):
         q = QUESTIONS[q_index]
-        all_options = q["options"]
-        if message.text not in all_options:
+        if message.text not in q["options"]:
             await message.answer("⚠️ Пожалуйста, выбери один из вариантов кнопками!")
             return
         if message.text == q["correct"]:
@@ -247,31 +227,22 @@ async def handle_answer(message: types.Message, state: FSMContext):
     await send_question(message, state)
 
 async def send_captcha(message: types.Message, state: FSMContext):
-    builder = ReplyKeyboardBuilder()
-    for opt in CAPTCHA["options"]:
-        builder.add(KeyboardButton(text=opt))
-    builder.adjust(2)
+    await message.answer(CAPTCHA["text"], reply_markup=make_keyboard(CAPTCHA["options"]))
 
-    await message.answer(
-        CAPTCHA["text"],
-        reply_markup=builder.as_markup(resize_keyboard=True)
-    )
-
-@dp.message(IQTest.captcha)
+@dp.message_handler(state=IQTest.captcha)
 async def handle_captcha(message: types.Message, state: FSMContext):
     if message.text not in CAPTCHA["options"]:
         await message.answer("⚠️ Выбери один из вариантов!")
         return
 
+    await IQTest.analyzing.set()
     await message.answer(
         "✅ Капча пройдена! Начинаю анализ результатов...",
-        reply_markup=ReplyKeyboardRemove()
+        reply_markup=types.ReplyKeyboardRemove()
     )
-    await state.set_state(IQTest.analyzing)
     await run_analysis(message, state)
 
 async def run_analysis(message: types.Message, state: FSMContext):
-    # Анимация анализа
     frames = [
         "🔬 Анализирую нейронные связи........",
         "📊 Обрабатываю данные теста..........",
@@ -283,14 +254,12 @@ async def run_analysis(message: types.Message, state: FSMContext):
     ]
 
     sent = await message.answer(frames[0])
-
     for frame in frames[1:]:
         await asyncio.sleep(1.2)
         await sent.edit_text(frame)
 
     await asyncio.sleep(1.5)
 
-    # Красивый прогресс-бар
     await sent.edit_text("⏳ Финальный подсчёт IQ...\n\n▓░░░░░░░░░  10%")
     await asyncio.sleep(0.8)
     await sent.edit_text("⏳ Финальный подсчёт IQ...\n\n▓▓▓░░░░░░░  30%")
@@ -304,11 +273,9 @@ async def run_analysis(message: types.Message, state: FSMContext):
     await sent.edit_text("⏳ Финальный подсчёт IQ...\n\n▓▓▓▓▓▓▓▓▓▓  100%\n\n✅ Анализ завершён!")
     await asyncio.sleep(1.5)
 
-    # Генерируем IQ от 30 до 70
     iq = random.randint(30, 70)
     title, comment = get_analysis(iq)
 
-    # Результат
     await message.answer(
         f"━━━━━━━━━━━━━━━━━━━━━\n"
         f"📋 <b>РЕЗУЛЬТАТ IQ ТЕСТА</b>\n"
@@ -318,39 +285,33 @@ async def run_analysis(message: types.Message, state: FSMContext):
         f"📝 <b>Вердикт нейросети:</b>\n\n"
         f"{comment}\n\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"<i>© Certified IQ Test 2025. Все результаты точны на 146%</i>",
-        parse_mode="HTML"
+        f"<i>© Certified IQ Test 2025. Все результаты точны на 146%</i>"
     )
 
-    # Отправляем картинку лосяша
     await asyncio.sleep(1)
     try:
-        import os
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-photo = FSInputFile(os.path.join(BASE_DIR, "losash.png"))
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+        photo = types.InputFile(os.path.join(BASE_DIR, "losash.png"))
         await message.answer_photo(
             photo=photo,
             caption=(
                 "😢 <b>Лосяш тоже расстроен твоим результатом...</b>\n\n"
                 "Но не переживай! Ты всё равно лучше, чем Даниил Коротких 🫡\n\n"
                 "🔄 Хочешь попробовать ещё раз? /start"
-            ),
-            parse_mode="HTML"
+            )
         )
     except Exception:
         await message.answer(
-            "😢 <b>Лосяш плачет из-за твоего результата...</b>\n"
-            "(Картинка не найдена — положи losash.png рядом с ботом)\n\n"
-            "🔄 Попробовать снова: /start",
-            parse_mode="HTML"
+            "😢 <b>Лосяш плачет из-за твоего результата...</b>\n\n"
+            "🔄 Попробовать снова: /start"
         )
 
-    await state.clear()
+    await state.finish()
 
 # ==============================
 # /help
 # ==============================
-@dp.message(Command("help"))
+@dp.message_handler(commands=["help"])
 async def cmd_help(message: types.Message):
     await message.answer(
         "ℹ️ <b>IQ Тест — Справка</b>\n\n"
@@ -358,16 +319,12 @@ async def cmd_help(message: types.Message):
         "Команды:\n"
         "/start — начать тест\n"
         "/help — эта справка\n\n"
-        "<i>Тест абсолютно честный и научно обоснованный™</i>",
-        parse_mode="HTML"
+        "<i>Тест абсолютно честный и научно обоснованный™</i>"
     )
 
 # ==============================
 # Запуск
 # ==============================
-async def main():
-    print("🤖 IQ Prank Bot запущен!")
-    await dp.start_polling(bot)
-
 if __name__ == "__main__":
-    asyncio.run(main())
+    print("🤖 IQ Prank Bot запущен!")
+    executor.start_polling(dp, skip_updates=True)
