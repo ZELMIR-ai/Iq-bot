@@ -12,7 +12,8 @@ from aiogram.utils.keyboard import ReplyKeyboardBuilder
 # ==============================
 # НАСТРОЙКИ
 # ==============================
-BOT_TOKEN = "ВСТАВЬ_ТОКЕН_СЮДА"  # Получи у @BotFather
+import os
+BOT_TOKEN = os.getenv("BOT_TOKEN") 
 
 logging.basicConfig(level=logging.INFO)
 
