@@ -325,7 +325,9 @@ async def run_analysis(message: types.Message, state: FSMContext):
     # Отправляем картинку лосяша
     await asyncio.sleep(1)
     try:
-        photo = FSInputFile("losash.png")
+        import os
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+photo = FSInputFile(os.path.join(BASE_DIR, "losash.png"))
         await message.answer_photo(
             photo=photo,
             caption=(
